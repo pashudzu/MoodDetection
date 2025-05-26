@@ -1,8 +1,19 @@
-import cv2
+import cv2 as cv
 
-cam = VideoCaputure(0)
-result, image = cam.read()
+cam = cv.VideoCapture(0)
 
-if result:
-    imshow("cam", image)
-    imwrite("camING.phg", image)
+if not cam.isOpened():
+    print("Камера не открыта!")
+    exit()
+
+while True:
+    result, frame = cam.read()
+    if not result:
+        print("Here no result")
+        break
+    cv.imshow("VideoCapture", frame)
+    if cv.waitKey(1) & 0xFF == ord('q'):
+        print("Exit key just pressed")
+        break
+cam.release()
+cv.destroyAllWindows()
