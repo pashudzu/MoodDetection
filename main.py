@@ -43,6 +43,8 @@ if not is_dataset_unpacked():
     with zipfile.ZipFile(zip_dataset_file_path, 'r') as zip_ref:
         print("Unpacking dataset")
         zip_ref.extractall(datasets_path)
+    with zipfile.ZipFile(zip_csv_file_path, 'r') as zip_ref:
+        zip_ref.extractall(datasets_path)
 
 transform = transforms.Compose([
     transforms.ToTensor(),
