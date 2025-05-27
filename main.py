@@ -1,4 +1,5 @@
 import cv2 as cv
+import torch.nn as nn
 import zipfile
 import os
 
@@ -37,6 +38,27 @@ if not is_dataset_unpacked():
     with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
         print("Unpacking dataset")
         zip_ref.extractall(datasets_path)
+
+class NeuralNetwork(nn.Module):
+    def __init__(self):
+        super(self, NeuralNerwork).__init__()
+
+        self.model = nn.Sequential(
+            nn.Conv2d(1, 32, karnel_size=3, padding=1),
+            nn.LeakyReLU(0.01),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(32, 64, karnel_size=3, padding=1),
+            nn.LeakyReLU(0.01),
+            nn.MaxPool2d(2),
+
+            nn.Flatten(),
+            nn.Linear(64 * 12 * 12, 512),
+            nn.LeakyReLU(0.01),
+            nn.Linear(512, 7),
+        )
+    def forward(self, x):
+        return self.model(x)
 
 while True:
     result, frame = cam.read()
