@@ -1,14 +1,18 @@
 import cv2 as cv
 import torch.nn as nn
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 import zipfile
 import os
 
 face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 datasets_path = "datasets"
-zip_file_path = os.path.join(datasets_path, "fer2013.zip")
+zip_dataset_file_path = os.path.join(datasets_path, "fer2013.zip")
+zip_csv_file_path = os.path.join(datasets_path, "facialexpressionrecognition.zip")
 test_dataset_path = os.path.join(datasets_path, "test")
 train_dataset_path = os.path.join(datasets_path, "train")
+scv_file_path = os.path.join(datasets_path, "fer2013.csv")
 
 cam = cv.VideoCapture(0)
 
@@ -17,12 +21,12 @@ if not cam.isOpened():
     exit()
 
 def is_dataset_downloaded():
-    if os.path.exists(zip_file_path):
+    if os.path.exists(zip_dataset_file_path) and os.path.exists(zip_csv_file_path):
         return True
     else:
         return False
 def is_dataset_unpacked():
-    if os.path.exists(test_dataset_path) and os.path.exists(train_dataset_path):
+    if os.path.exists(test_dataset_path) and os.path.exists(train_dataset_path) and os.path.exists(scv_file_path):
         print("Dataset has already unpacked")
         return True
     else:
@@ -30,18 +34,30 @@ def is_dataset_unpacked():
 
 if not is_dataset_downloaded():
     os.system("kaggle datasets download -d msambare/fer2013 -p ./datasets")
+    os.system("kaggle datasets download -d nicolejyt/facialexpressionrecognition -p ./datasets")
     print("Dataset was downloaded")
 else:
     print("Dataset has already downloaded")
 
 if not is_dataset_unpacked():
-    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+    with zipfile.ZipFile(zip_dataset_file_path, 'r') as zip_ref:
         print("Unpacking dataset")
         zip_ref.extractall(datasets_path)
 
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+#class FERDataset(Dataset):
+
+
 class NeuralNetwork(nn.Module):
     def __init__(self):
-        super(self, NeuralNerwork).__init__()
+        super(NeuralNerwork, self).__init__()
+
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.optim = torch.optim.Adam(self.generator.parameters(), 0.002)
 
         self.model = nn.Sequential(
             nn.Conv2d(1, 32, karnel_size=3, padding=1),
@@ -59,6 +75,10 @@ class NeuralNetwork(nn.Module):
         )
     def forward(self, x):
         return self.model(x)
+
+    #def train(self, epochs, batch_size, data_loader):
+    #    for epoth in range(epothes):
+
 
 while True:
     result, frame = cam.read()
