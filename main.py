@@ -1,6 +1,8 @@
 import cv2 as cv
 import torch.nn as nn
 import torchvision.transforms as transforms
+import torch.accelerator as accelerator
+import torch.optim as optim
 import pandas as pd
 import numpy as np
 import zipfile
@@ -18,6 +20,10 @@ train_dataset_path = os.path.join(datasets_path, "train")
 scv_file_path = os.path.join(datasets_path, "fer2013.csv")
 
 cam = cv.VideoCapture(0)
+
+device = accelerator.current_accelerator if accelerator.is_available() else "cpu"
+
+print(f"device is {device}")
 
 if not cam.isOpened():
     print("Камера не открыта!")
@@ -54,17 +60,14 @@ class FERDataset(Dataset):
 
 class NeuralNetwork(nn.Module):
     def __init__(self):
-        super(NeuralNerwork, self).__init__()
-
-        self.loss_fn = nn.CrossEntropyLoss()
-        self.optim = torch.optim.Adam(self.generator.parameters(), 0.002)
+        super(NeuralNetwork, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Conv2d(1, 32, karnel_size=3, padding=1),
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.LeakyReLU(0.01),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 64, karnel_size=3, padding=1),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.LeakyReLU(0.01),
             nn.MaxPool2d(2),
 
@@ -73,11 +76,17 @@ class NeuralNetwork(nn.Module):
             nn.LeakyReLU(0.01),
             nn.Linear(512, 7),
         )
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.optim = optim.Adam(self.model.parameters(), 0.002)
+
     def forward(self, x):
         return self.model(x)
 
     #def train(self, epochs, batch_size, data_loader):
     #    for epoth in range(epothes):
+    #        for batch, (X, y) in enumerate()
+
+model = NeuralNetwork().to(device)
 
 if not is_dataset_downloaded():
     os.system("kaggle datasets download -d msambare/fer2013 -p ./datasets")
@@ -99,6 +108,7 @@ transform = transforms.Compose([
 ])
 
 train_dataset = FERDataset(zip_csv_file_path, transform, True)
+test_dataset = FERDataset(zip_csv_file_path, transform, False)
 
 while True:
     result, frame = cam.read()
