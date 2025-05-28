@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import zipfile
 import os
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 
 face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -82,9 +82,9 @@ class NeuralNetwork(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    #def train(self, epochs, batch_size, data_loader):
-    #    for epoth in range(epothes):
-    #        for batch, (X, y) in enumerate()
+#    def train(self, epochs, batch_size, data_loader):
+#        for epoth in range(epothes):
+#            for batch, (X, y) in enumerate()
 
 model = NeuralNetwork().to(device)
 
@@ -109,6 +109,9 @@ transform = transforms.Compose([
 
 train_dataset = FERDataset(zip_csv_file_path, transform, True)
 test_dataset = FERDataset(zip_csv_file_path, transform, False)
+
+train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=1)
+test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=1)
 
 while True:
     result, frame = cam.read()
