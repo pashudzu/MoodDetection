@@ -1,9 +1,12 @@
 import cv2 as cv
 import torch.nn as nn
-import torchvision.datasets as datasets
 import torchvision.transforms as transforms
+import pandas as pd
+import numpy as np
 import zipfile
 import os
+from torch.utils.data import Dataset
+from torchvision.io import read_image
 
 face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
@@ -22,7 +25,7 @@ if not cam.isOpened():
 
 def is_dataset_downloaded():
     if os.path.exists(zip_dataset_file_path) and os.path.exists(zip_csv_file_path):
-        return True
+      return True
     else:
         return False
 def is_dataset_unpacked():
@@ -32,27 +35,22 @@ def is_dataset_unpacked():
     else:
         return False
 
-if not is_dataset_downloaded():
-    os.system("kaggle datasets download -d msambare/fer2013 -p ./datasets")
-    os.system("kaggle datasets download -d nicolejyt/facialexpressionrecognition -p ./datasets")
-    print("Dataset was downloaded")
-else:
-    print("Dataset has already downloaded")
-
-if not is_dataset_unpacked():
-    with zipfile.ZipFile(zip_dataset_file_path, 'r') as zip_ref:
-        print("Unpacking dataset")
-        zip_ref.extractall(datasets_path)
-    with zipfile.ZipFile(zip_csv_file_path, 'r') as zip_ref:
-        zip_ref.extractall(datasets_path)
-
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,))
-])
-
-#class FERDataset(Dataset):
-
+class FERDataset(Dataset):
+    def __init__(self, annotations_file, transform, train):
+        self.transform = transform
+        if (train):
+            self.usage = 'Training'
+        else:
+            self.usage = 'PrivateTest'
+        self.img_labels = pd.read_csv(annotations_file)
+        self.usage_labels = self.img_labels[self.img_labels['Usage'] == self.usage]
+    def __len__(self):
+        return len(self.usage_labels)
+    def __getitem__(self, idx):
+        img_path = self.usage_labels.iloc[idx, 0]
+        image = read_image(img_path)
+        label = self.usage_labels.iloc[idx, 1]
+        return image, label
 
 class NeuralNetwork(nn.Module):
     def __init__(self):
@@ -81,6 +79,26 @@ class NeuralNetwork(nn.Module):
     #def train(self, epochs, batch_size, data_loader):
     #    for epoth in range(epothes):
 
+if not is_dataset_downloaded():
+    os.system("kaggle datasets download -d msambare/fer2013 -p ./datasets")
+    os.system("kaggle datasets download -d nicolejyt/facialexpressionrecognition -p ./datasets")
+    print("Dataset was downloaded")
+else:
+    print("Dataset has already downloaded")
+
+if not is_dataset_unpacked():
+    with zipfile.ZipFile(zip_dataset_file_path, 'r') as zip_ref:
+        print("Unpacking dataset")
+        zip_ref.extractall(datasets_path)
+    with zipfile.ZipFile(zip_csv_file_path, 'r') as zip_ref:
+        zip_ref.extractall(datasets_path)
+
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+train_dataset = FERDataset(zip_csv_file_path, transform, True)
 
 while True:
     result, frame = cam.read()
