@@ -33,7 +33,7 @@ if not cam.isOpened():
     exit()
 
 def is_dataset_downloaded():
-    if os.path.exists(zip_dataset_file_path) and os.path.exists(zip_csv_file_path):
+    if os.path.exists(zip_csv_file_path):
       return True
     else:
         return False
@@ -130,16 +130,12 @@ class NeuralNetwork(nn.Module):
         print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 if not is_dataset_downloaded():
-    os.system("kaggle datasets download -d msambare/fer2013 -p ./datasets")
     os.system("kaggle datasets download -d nicolejyt/facialexpressionrecognition -p ./datasets")
     print("Dataset was downloaded")
 else:
     print("Dataset has already downloaded")
 
 if not is_dataset_unpacked():
-    with zipfile.ZipFile(zip_dataset_file_path, 'r') as zip_ref:
-        print("Unpacking dataset")
-        zip_ref.extractall(datasets_path)
     with zipfile.ZipFile(zip_csv_file_path, 'r') as zip_ref:
         zip_ref.extractall(datasets_path)
 
