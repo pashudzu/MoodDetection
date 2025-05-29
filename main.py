@@ -1,4 +1,5 @@
 import cv2 as cv
+import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torch.accelerator as accelerator
@@ -7,6 +8,7 @@ import pandas as pd
 import numpy as np
 import zipfile
 import os
+from PIL import Image 
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 
@@ -42,7 +44,7 @@ def is_dataset_unpacked():
         return False
 
 class FERDataset(Dataset):
-    def __init__(self, annotations_file, transform, train):
+    def __init__(self, annotations_file, transform, train, data_path):
         self.transform = transform
         if (train):
             self.usage = 'Training'
@@ -50,12 +52,19 @@ class FERDataset(Dataset):
             self.usage = 'PrivateTest'
         self.img_labels = pd.read_csv(annotations_file)
         self.usage_labels = self.img_labels[self.img_labels['Usage'] == self.usage]
+        self.data_path = data_path
+        print(self.usage_labels.head())
     def __len__(self):
         return len(self.usage_labels)
     def __getitem__(self, idx):
-        img_path = self.usage_labels.iloc[idx, 0]
-        image = read_image(img_path)
-        label = self.usage_labels.iloc[idx, 1]
+        pixels_string = self.usage_labels.iloc[idx, 1]
+        pixels = np.fromstring(pixels_string, sep=" ", dtype=np.uint8).reshape((48, 48))
+        image = Image.fromarray(pixels)
+        
+        if self.transform:
+            image = self.transform(image)
+
+        label = self.usage_labels.iloc[idx, 0]
         return image, label
 
 class NeuralNetwork(nn.Module):
@@ -82,11 +91,33 @@ class NeuralNetwork(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-#    def train(self, epochs, batch_size, data_loader):
-#        for epoth in range(epothes):
-#            for batch, (X, y) in enumerate()
-
-model = NeuralNetwork().to(device)
+    def train(self, data_loader):
+        size = len(data_loader.dataset)
+        self.model.train()
+        for batch, (X, y) in enumerate(data_loader):
+            X, y = X.to(device), y.to(device)
+            pred = self.model(X)
+            loss = self.loss_fn(pred, y)
+            loss.backward()
+            self.optim.step()
+            self.optim.zero_grad()
+            
+            if batch % 100 == 0:
+                loss, current = loss.item(), (batch + 1) * len(X)
+                print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+    def test(self, data_loader):
+        size = len(data_loader.dataset)
+        test_loss, correct = 0, 0
+        num_baches = len(data_loader)
+        with torch.no_grad():
+            for X, y in data_loader:
+                X, y = X.to(device), y.to(device)
+                pred = self.model(X)
+                test_loss += self.loss_fn(pred, y)
+                correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+        test_loss /= num_baches
+        correct /= size
+        print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 if not is_dataset_downloaded():
     os.system("kaggle datasets download -d msambare/fer2013 -p ./datasets")
@@ -107,11 +138,20 @@ transform = transforms.Compose([
     transforms.Normalize((0.5,), (0.5,))
 ])
 
-train_dataset = FERDataset(zip_csv_file_path, transform, True)
-test_dataset = FERDataset(zip_csv_file_path, transform, False)
+train_dataset = FERDataset(zip_csv_file_path, transform, True, datasets_path)
+test_dataset = FERDataset(zip_csv_file_path, transform, False, datasets_path)
 
-train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=1)
-test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=1)
+train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0)
+test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=0)
+
+model = NeuralNetwork().to(device)
+
+epochs = 5
+for epoch in range(epochs):
+    print(f"Epoch {epoch+1}\n-------------------------------")
+    model.train(train_dataloader)
+    model.test(test_dataloader)
+    print("Done!")
 
 while True:
     result, frame = cam.read()
