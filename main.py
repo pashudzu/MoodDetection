@@ -20,6 +20,7 @@ zip_csv_file_path = os.path.join(datasets_path, "facialexpressionrecognition.zip
 test_dataset_path = os.path.join(datasets_path, "test")
 train_dataset_path = os.path.join(datasets_path, "train")
 scv_file_path = os.path.join(datasets_path, "fer2013.csv")
+saved_model_path = os.path.join("model", "saved_model.pth")
 
 cam = cv.VideoCapture(0)
 
@@ -73,23 +74,32 @@ class NeuralNetwork(nn.Module):
 
         self.model = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
             nn.LeakyReLU(0.01),
             nn.MaxPool2d(2),
 
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.01),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
             nn.LeakyReLU(0.01),
             nn.MaxPool2d(2),
 
             nn.Flatten(),
-            nn.Linear(64 * 12 * 12, 512),
+            nn.Linear(128 * 6 * 6, 512),
             nn.LeakyReLU(0.01),
+            nn.Dropout(0.5),
             nn.Linear(512, 7),
         )
         self.loss_fn = nn.CrossEntropyLoss()
         self.optim = optim.Adam(self.model.parameters(), 0.002)
 
     def forward(self, x):
-        return self.model(x)
+        self.model(x)
+        return(x)
 
     def train(self, data_loader):
         size = len(data_loader.dataset)
@@ -113,7 +123,7 @@ class NeuralNetwork(nn.Module):
             for X, y in data_loader:
                 X, y = X.to(device), y.to(device)
                 pred = self.model(X)
-                test_loss += self.loss_fn(pred, y)
+                test_loss += self.loss_fn(pred, y).item()
                 correct += (pred.argmax(1) == y).type(torch.float).sum().item()
         test_loss /= num_baches
         correct /= size
@@ -146,12 +156,17 @@ test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_work
 
 model = NeuralNetwork().to(device)
 
-epochs = 5
-for epoch in range(epochs):
-    print(f"Epoch {epoch+1}\n-------------------------------")
-    model.train(train_dataloader)
-    model.test(test_dataloader)
-    print("Done!")
+if not os.path.exists(saved_model_path):
+    epochs = 10
+    for epoch in range(epochs):
+        print(f"Epoch {epoch+1}\n-------------------------------")
+        model.train(train_dataloader)
+        model.test(test_dataloader)
+        print("Done!")
+    torch.save(model.state_dict(), saved_model_path)
+else:
+    model.load_state_dict(torch.load(saved_model_path, weights_only=True))
+    print("Saved model loaded")
 
 while True:
     result, frame = cam.read()
