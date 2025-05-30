@@ -173,7 +173,21 @@ while True:
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
     for (x, y, w, h) in faces:
         cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-    cv.imshow("VideoCapture", frame)
+        face = frame[y:y+h, x:x+w]
+        face_resized = cv.resize(face, (48, 48))
+        face_gray = cv.cvtColor(face_resized, cv.COLOR_BGR2GRAY)
+        face_transformed = transform(face_gray)
+        
+        print(face_transformed.shape)
+        print(face_transformed.min(), face_transformed.max())
+
+        face_transformed = face_transformed.to(device)
+        face_4d = face_transformed.unsqueeze(0)
+        cv.imshow("VideoCapture", face_gray)
+        pred = model(face_4d).argmax(1)
+        print(pred)
+
+    #cv.imshow("VideoCapture", frame)
     if cv.waitKey(1) & 0xFF == ord('q'):
         print("Exit key just pressed")
         break
