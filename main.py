@@ -22,6 +22,16 @@ train_dataset_path = os.path.join(datasets_path, "train")
 scv_file_path = os.path.join(datasets_path, "fer2013.csv")
 saved_model_path = os.path.join("model", "saved_model.pth")
 
+EMOJI_MAP = {
+    0: Image.open(os.path.join("emojis", "angry_emoji.png")),
+    1: Image.open(os.path.join("emojis", "disgust_emoji.png")),
+    2: Image.open(os.path.join("emojis", "fear_emoji.png")),
+    3: Image.open(os.path.join("emojis", "happy_emoji.png")),
+    4: Image.open(os.path.join("emojis", "neutral_emoji.png")),
+    5: Image.open(os.path.join("emojis", "sad_emoji.png")),
+    6: Image.open(os.path.join("emojis", "surprise_emoji.png")),
+}
+
 cam = cv.VideoCapture(0)
 
 device = accelerator.current_accelerator if accelerator.is_available() else "cpu"
@@ -43,6 +53,8 @@ def is_dataset_unpacked():
         return True
     else:
         return False
+def get_emoji_img_by_id(id):
+    return EMOJI_MAP.get(id)
 
 class FERDataset(Dataset):
     def __init__(self, annotations_file, transform, train, data_path):
@@ -128,6 +140,11 @@ class NeuralNetwork(nn.Module):
         test_loss /= num_baches
         correct /= size
         print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    def detect_camera_emoji(self, face):
+        torch.no_grad()
+        self.model.eval() 
+        pred = self.model(face).argmax(1)
+        return pred
 
 if not is_dataset_downloaded():
     os.system("kaggle datasets download -d nicolejyt/facialexpressionrecognition -p ./datasets")
@@ -164,6 +181,8 @@ else:
     model.load_state_dict(torch.load(saved_model_path, weights_only=True))
     print("Saved model loaded")
 
+current_emoji_img = None
+
 while True:
     result, frame = cam.read()
     if not result:
@@ -176,18 +195,15 @@ while True:
         face = frame[y:y+h, x:x+w]
         face_resized = cv.resize(face, (48, 48))
         face_gray = cv.cvtColor(face_resized, cv.COLOR_BGR2GRAY)
-        face_transformed = transform(face_gray)
-        
-        print(face_transformed.shape)
-        print(face_transformed.min(), face_transformed.max())
+        face_transformed = transform(face_gray).to(device).unsqueeze(0)
+        emoji_idx = float(model.detect_camera_emoji(face_transformed))
+        #emoji_img = np.array(get_emoji_img_by_id(emoji_idx))
+        #if emoji_img is not None:
+        #    frame = cv.addWeighted(emoji_img, 1, frame, 1, 0)
+        #print(emoji_img)
+        print(emoji_idx)
 
-        face_transformed = face_transformed.to(device)
-        face_4d = face_transformed.unsqueeze(0)
-        cv.imshow("VideoCapture", face_gray)
-        pred = model(face_4d).argmax(1)
-        print(pred)
-
-    #cv.imshow("VideoCapture", frame)
+    cv.imshow("VideoCapture", frame)
     if cv.waitKey(1) & 0xFF == ord('q'):
         print("Exit key just pressed")
         break
