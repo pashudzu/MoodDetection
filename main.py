@@ -85,7 +85,12 @@ class NeuralNetwork(nn.Module):
         super(NeuralNetwork, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.LeakyReLU(0.01),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.01),
             nn.MaxPool2d(2),
@@ -95,23 +100,17 @@ class NeuralNetwork(nn.Module):
             nn.LeakyReLU(0.01),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.01),
-            nn.MaxPool2d(2),
-
             nn.Flatten(),
-            nn.Linear(128 * 6 * 6, 512),
+            nn.Dropout(0.6),
+            nn.Linear(64 * 6 * 6, 256),
             nn.LeakyReLU(0.01),
-            nn.Dropout(0.5),
-            nn.Linear(512, 7),
+            nn.Linear(256, 7),
         )
         self.loss_fn = nn.CrossEntropyLoss()
-        self.optim = optim.Adam(self.model.parameters(), 0.002)
+        self.optim = optim.Adam(self.model.parameters(), lr=0.001, weight_decay=1e-3)
 
     def forward(self, x):
-        self.model(x)
-        return(x)
+        return self.model(x)
 
     def train(self, data_loader):
         size = len(data_loader.dataset)
@@ -140,11 +139,37 @@ class NeuralNetwork(nn.Module):
         test_loss /= num_baches
         correct /= size
         print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+        return test_loss
     def detect_camera_emoji(self, face):
         torch.no_grad()
         self.model.eval() 
         pred = self.model(face).argmax(1)
         return pred
+
+class EarlyStopping:
+    def __init__(self, patience=5, delta=0):
+        self.patience = patience
+        self.delta = delta
+        self.best_score = None
+        self.early_stop = False
+        self.counter = 0
+        self.best_model_state = None
+
+    def __call__(self, val_loss, model):
+        score = -val_loss
+        if self.best_score is None:
+            self.best_score = score
+            self.best_model_state = model.state_dict()
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.best_model_state = model.state_dict()
+            self.counter = 0
+    def load_best_model(self, model):
+        model.load_stat_dict(self.best_model_state)
 
 if not is_dataset_downloaded():
     os.system("kaggle datasets download -d nicolejyt/facialexpressionrecognition -p ./datasets")
@@ -169,13 +194,21 @@ test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_work
 
 model = NeuralNetwork().to(device)
 
+early_stopper = EarlyStopping(patience=5, delta=0.001)
+
 if not os.path.exists(saved_model_path):
-    epochs = 10
+    print(model)
+    epochs = 20
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}\n-------------------------------")
         model.train(train_dataloader)
-        model.test(test_dataloader)
+        val_los = model.test(test_dataloader)
         print("Done!")
+
+        early_stopper(val_los, model)
+        if early_stopper.early_stop:
+            print("🛑 Early stopping triggered.")
+            break
     torch.save(model.state_dict(), saved_model_path)
 else:
     model.load_state_dict(torch.load(saved_model_path, weights_only=True))
