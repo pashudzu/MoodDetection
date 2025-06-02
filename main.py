@@ -22,14 +22,23 @@ train_dataset_path = os.path.join(datasets_path, "train")
 scv_file_path = os.path.join(datasets_path, "fer2013.csv")
 saved_model_path = os.path.join("model", "saved_model.pth")
 
-EMOJI_MAP = {
-    0: Image.open(os.path.join("emojis", "angry_emoji.png")),
-    1: Image.open(os.path.join("emojis", "disgust_emoji.png")),
-    2: Image.open(os.path.join("emojis", "fear_emoji.png")),
-    3: Image.open(os.path.join("emojis", "happy_emoji.png")),
-    4: Image.open(os.path.join("emojis", "neutral_emoji.png")),
-    5: Image.open(os.path.join("emojis", "sad_emoji.png")),
-    6: Image.open(os.path.join("emojis", "surprise_emoji.png")),
+EMOJI_NAME_MAP = {
+    0: "angry",
+    1: "disgust",
+    2: "fear",
+    3: "happy",
+    4: "neutral",
+    5: "sad",
+    6: "surprise",
+}
+EMOJI_IMAGE_MAP = {
+    0: cv.imread(os.path.join("emojis", "angry_emoji.png"), cv.IMREAD_UNCHANGED),
+    1: cv.imread(os.path.join("emojis", "disgust_emoji.png"), cv.IMREAD_UNCHANGED),
+    2: cv.imread(os.path.join("emojis", "fear_emoji.png"), cv.IMREAD_UNCHANGED),
+    3: cv.imread(os.path.join("emojis", "happy_emoji.png"), cv.IMREAD_UNCHANGED),
+    4: cv.imread(os.path.join("emojis", "neutral_emoji.png"), cv.IMREAD_UNCHANGED),
+    5: cv.imread(os.path.join("emojis", "sad_emoji.png"), cv.IMREAD_UNCHANGED),
+    6: cv.imread(os.path.join("emojis", "surprise_emoji.png"), cv.IMREAD_UNCHANGED),
 }
 
 cam = cv.VideoCapture(0)
@@ -54,7 +63,9 @@ def is_dataset_unpacked():
     else:
         return False
 def get_emoji_img_by_id(id):
-    return EMOJI_MAP.get(id)
+    return EMOJI_IMAGE_MAP.get(id)
+def get_emoji_name_by_id(id):
+    return EMOJI_NAME_MAP.get(id)
 
 class FERDataset(Dataset):
     def __init__(self, annotations_file, transform, train, data_path):
@@ -230,13 +241,26 @@ while True:
         face_gray = cv.cvtColor(face_resized, cv.COLOR_BGR2GRAY)
         face_transformed = transform(face_gray).to(device).unsqueeze(0)
         emoji_idx = float(model.detect_camera_emoji(face_transformed))
-        #emoji_img = np.array(get_emoji_img_by_id(emoji_idx))
-        #if emoji_img is not None:
-        #    frame = cv.addWeighted(emoji_img, 1, frame, 1, 0)
-        #print(emoji_img)
+        emoji_img = np.array(get_emoji_img_by_id(emoji_idx))
+        h_emoji, w_emoji = emoji_img.shape[:2]
+        x_offset, y_offset = 10, 10
+        if emoji_img.shape[2] == 4:
+            alpha_channel = emoji_img[:, :, 3] / 255.0
+            emoji_bgr = emoji_img[:, :, :3]
+            roi = frame[y_offset:y_offset + h_emoji, x_offset:x_offset+w_emoji]
+        else:
+            alpha_channel = None
+            emoji_brg = emoji_img
+            roi[:] = emoji_brg
+        if alpha_channel is not None:
+            for c in range(3):
+                roi[:, :, c] = roi[:, :, c] * (1 - alpha_channel) + emoji_bgr[:, :, c] * alpha_channel
+        else:
+            roi[:] = logo_bgr
+        frame[y_offset:y_offset+h_emoji, x_offset:x_offset+w_emoji] = roi
         print(emoji_idx)
 
-    cv.imshow("VideoCapture", frame)
+    cv.imshow("MoodDetection", frame)
     if cv.waitKey(1) & 0xFF == ord('q'):
         print("Exit key just pressed")
         break
